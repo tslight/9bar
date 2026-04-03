@@ -48,8 +48,8 @@ static int batt = -1;
 static int onac;
 static unsigned int barw, barh;
 static int hidden;
-static char *fontname = "monospace:size=11";
-static char *timefmt = "%b %d %H:%M";
+static char *fontname = "monospace:bold:size=9";
+static char *timefmt = "%H:%M %a %d/%m";
 
 #ifdef __OpenBSD__
 static int apmfd = -1;
@@ -122,11 +122,18 @@ textwidth(char *s)
 }
 
 static void
+drawstr(XftColor *c, int x, int y, char *s)
+{
+	XftDrawStringUtf8(draw, c, font, x, y,
+		(FcChar8 *)s, (int)strlen(s));
+}
+
+static void
 redraw(void)
 {
 	time_t now;
 	struct tm *t;
-	char tbuf[64], bbuf[32], buf[128];
+	char tbuf[64], bbuf[32];
 	int x, y, c;
 	unsigned int w, h;
 
@@ -135,14 +142,14 @@ redraw(void)
 	strftime(tbuf, sizeof tbuf, timefmt, t);
 
 	if(batt >= 0){
-		snprintf(bbuf, sizeof bbuf, onac ? " %d%%" : " !%d%%", batt);
-		snprintf(buf, sizeof buf, "%s%s", tbuf, bbuf);
+		snprintf(bbuf, sizeof bbuf, onac ? "%d%%" : "!%d%%", batt);
 	}else{
-		snprintf(buf, sizeof buf, "%s", tbuf);
 		bbuf[0] = '\0';
 	}
 
-	w = (unsigned int)textwidth(buf) + Padding*2;
+	w = (unsigned int)textwidth(tbuf)+Padding*2;
+	if(bbuf[0])
+		w += (unsigned int)textwidth(bbuf)+(unsigned int)textwidth(" ");
 	h = (unsigned int)(font->ascent + font->descent) + Padding*2;
 	if(w != barw || h != barh){
 		barw = w;
@@ -162,15 +169,15 @@ redraw(void)
 
 	x = Padding;
 	y = Padding + font->ascent;
-	XftDrawStringUtf8(draw, &col[Fg], font, x, y,
-		(FcChar8 *)tbuf, (int)strlen(tbuf));
 
-	if(batt >= 0){
+	if(bbuf[0]){
 		c = onac ? Ac : batt > 50 ? Hi : batt > 25 ? Med : Lo;
-		XftDrawStringUtf8(draw, &col[c], font,
-			x + textwidth(tbuf), y,
-			(FcChar8 *)bbuf, (int)strlen(bbuf));
+		drawstr(&col[c], x, y, bbuf);
+		x += textwidth(bbuf);
+		drawstr(&col[Fg], x, y, " ");
+		x += textwidth(" ");
 	}
+	drawstr(&col[Fg], x, y, tbuf);
 
 	XCopyArea(dpy, pix, win, gc, 0, 0, barw, barh, 0, 0);
 }
@@ -225,7 +232,7 @@ main(int argc, char **argv)
 	fat.tm_hour = 20;
 	fat.tm_year = 100;
 	strftime(tbuf, sizeof tbuf, timefmt, &fat);
-	snprintf(maxstr, sizeof maxstr, "%s !100%%", tbuf);
+	snprintf(maxstr, sizeof maxstr, "!100%% %s", tbuf);
 	barw = (unsigned int)textwidth(maxstr) + Padding*2;
 	barh = (unsigned int)(font->ascent + font->descent) + Padding*2;
 
