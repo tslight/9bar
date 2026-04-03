@@ -33,7 +33,7 @@ enum {
 };
 
 enum {
-	Bg, Fg, Ac, Hi, Med, Lo, Ncol,
+	Bg, Fg, Ncol,
 };
 
 static Display *dpy;
@@ -100,14 +100,15 @@ static void readbattery(void) { batt = -1; }
 #endif
 
 static void
-mkcolor(int i, int r, int g, int b)
+mkcolor(int i, unsigned long pixel)
 {
-	XRenderColor rc;
-
-	rc.red = (unsigned short)(r * 257);
-	rc.green = (unsigned short)(g * 257);
-	rc.blue = (unsigned short)(b * 257);
+	XRenderColor rc = {0};
 	rc.alpha = 0xffff;
+	rc.red = (unsigned short)((pixel >> 16 & 0xff) * 257);
+	rc.green = (unsigned short)((pixel >> 8 & 0xff) * 257);
+	rc.blue = (unsigned short)((pixel & 0xff) * 257);
+	XftColorAllocValue(dpy, DefaultVisual(dpy, scr),
+		DefaultColormap(dpy, scr), &rc, &col[i]);
 	XftColorAllocValue(dpy, DefaultVisual(dpy, scr),
 		DefaultColormap(dpy, scr), &rc, &col[i]);
 }
@@ -134,7 +135,7 @@ redraw(void)
 	time_t now;
 	struct tm *t;
 	char tbuf[64], bbuf[32];
-	int x, y, c;
+	int x, y;
 	unsigned int w, h;
 
 	now = time(NULL);
@@ -171,8 +172,7 @@ redraw(void)
 	y = Padding + font->ascent;
 
 	if(bbuf[0]){
-		c = onac ? Ac : batt > 50 ? Hi : batt > 25 ? Med : Lo;
-		drawstr(&col[c], x, y, bbuf);
+		drawstr(&col[Fg], x, y, bbuf);
 		x += textwidth(bbuf);
 		drawstr(&col[Fg], x, y, " ");
 		x += textwidth(" ");
@@ -218,12 +218,8 @@ main(int argc, char **argv)
 	if(!(font = XftFontOpenName(dpy, scr, fontname)))
 		errx(1, "cannot open font: %s", fontname);
 
-	mkcolor(Bg, 0x9e, 0xee, 0xee);
-	mkcolor(Fg, 0x00, 0x00, 0x00);
-	mkcolor(Ac, 0x55, 0x6b, 0x2f);
-	mkcolor(Hi, 0x4a, 0x5a, 0x00);
-	mkcolor(Med, 0x99, 0x44, 0x00);
-	mkcolor(Lo, 0x88, 0x00, 0x00);
+	mkcolor(Bg, 0x9eeeee);
+	mkcolor(Fg, 0x000000);
 
 	/* worst case size */
 	memset(&fat, 0, sizeof fat);
