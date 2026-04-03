@@ -46,12 +46,10 @@ static XftDraw *draw;
 static XftColor col[Ncol];
 static int batt = -1;
 static int onac;
-static int barw, barh;
+static unsigned int barw, barh;
 static int hidden;
 static char *fontname = "monospace:size=11";
 static char *timefmt = "%b %d %H:%M";
-
-/* platform battery */
 
 #ifdef __OpenBSD__
 static int apmfd = -1;
@@ -104,8 +102,12 @@ static void readbattery(void) { batt = -1; }
 static void
 mkcolor(int i, int r, int g, int b)
 {
-	XRenderColor rc = {r*257, g*257, b*257, 0xffff};
+	XRenderColor rc;
 
+	rc.red = (unsigned short)(r * 257);
+	rc.green = (unsigned short)(g * 257);
+	rc.blue = (unsigned short)(b * 257);
+	rc.alpha = 0xffff;
 	XftColorAllocValue(dpy, DefaultVisual(dpy, scr),
 		DefaultColormap(dpy, scr), &rc, &col[i]);
 }
@@ -115,7 +117,7 @@ textwidth(char *s)
 {
 	XGlyphInfo ext;
 
-	XftTextExtentsUtf8(dpy, font, (FcChar8 *)s, strlen(s), &ext);
+	XftTextExtentsUtf8(dpy, font, (FcChar8 *)s, (int)strlen(s), &ext);
 	return ext.xOff;
 }
 
@@ -125,7 +127,8 @@ redraw(void)
 	time_t now;
 	struct tm *t;
 	char tbuf[64], bbuf[32], buf[128];
-	int x, y, w, h, c;
+	int x, y, c;
+	unsigned int w, h;
 
 	now = time(NULL);
 	t = localtime(&now);
@@ -139,19 +142,19 @@ redraw(void)
 		bbuf[0] = '\0';
 	}
 
-	w = textwidth(buf) + Padding*2;
-	h = font->ascent + font->descent + Padding*2;
+	w = (unsigned int)textwidth(buf) + Padding*2;
+	h = (unsigned int)(font->ascent + font->descent) + Padding*2;
 	if(w != barw || h != barh){
 		barw = w;
 		barh = h;
 		if(pix)
 			XFreePixmap(dpy, pix);
 		pix = XCreatePixmap(dpy, win, barw, barh,
-			DefaultDepth(dpy, scr));
+			(unsigned int)DefaultDepth(dpy, scr));
 		XftDrawChange(draw, pix);
 		XMoveResizeWindow(dpy, win,
-			DisplayWidth(dpy, scr) - barw,
-			DisplayHeight(dpy, scr) - barh, barw, barh);
+			DisplayWidth(dpy, scr) - (int)barw,
+			DisplayHeight(dpy, scr) - (int)barh, barw, barh);
 	}
 
 	XSetForeground(dpy, gc, col[Bg].pixel);
@@ -160,13 +163,13 @@ redraw(void)
 	x = Padding;
 	y = Padding + font->ascent;
 	XftDrawStringUtf8(draw, &col[Fg], font, x, y,
-		(FcChar8 *)tbuf, strlen(tbuf));
+		(FcChar8 *)tbuf, (int)strlen(tbuf));
 
 	if(batt >= 0){
 		c = onac ? Ac : batt > 50 ? Hi : batt > 25 ? Med : Lo;
 		XftDrawStringUtf8(draw, &col[c], font,
 			x + textwidth(tbuf), y,
-			(FcChar8 *)bbuf, strlen(bbuf));
+			(FcChar8 *)bbuf, (int)strlen(bbuf));
 	}
 
 	XCopyArea(dpy, pix, win, gc, 0, 0, barw, barh, 0, 0);
@@ -175,7 +178,7 @@ redraw(void)
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: 9bar [-f font] [-t timefmt]\n");
+	fprintf(stderr, "usage: bar [-f font] [-t timefmt]\n");
 	exit(1);
 }
 
@@ -223,20 +226,22 @@ main(int argc, char **argv)
 	fat.tm_year = 100;
 	strftime(tbuf, sizeof tbuf, timefmt, &fat);
 	snprintf(maxstr, sizeof maxstr, "%s !100%%", tbuf);
-	barw = textwidth(maxstr) + Padding*2;
-	barh = font->ascent + font->descent + Padding*2;
+	barw = (unsigned int)textwidth(maxstr) + Padding*2;
+	barh = (unsigned int)(font->ascent + font->descent) + Padding*2;
 
 	wa.override_redirect = True;
 	wa.background_pixel = col[Bg].pixel;
 	wa.event_mask = ExposureMask | ButtonPressMask;
 	win = XCreateWindow(dpy, RootWindow(dpy, scr),
-		DisplayWidth(dpy, scr) - barw,
-		DisplayHeight(dpy, scr) - barh, barw, barh, 0,
-		DefaultDepth(dpy, scr), InputOutput, DefaultVisual(dpy, scr),
+		DisplayWidth(dpy, scr) - (int)barw,
+		DisplayHeight(dpy, scr) - (int)barh, barw, barh, 0,
+		DefaultDepth(dpy, scr),
+		InputOutput, DefaultVisual(dpy, scr),
 		CWOverrideRedirect | CWBackPixel | CWEventMask, &wa);
 
 	gc = XCreateGC(dpy, win, 0, NULL);
-	pix = XCreatePixmap(dpy, win, barw, barh, DefaultDepth(dpy, scr));
+	pix = XCreatePixmap(dpy, win, barw, barh,
+		(unsigned int)DefaultDepth(dpy, scr));
 	draw = XftDrawCreate(dpy, pix,
 		DefaultVisual(dpy, scr), DefaultColormap(dpy, scr));
 
